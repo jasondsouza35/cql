@@ -1,2 +1,2 @@
-# cql_plus_plus
-SQL database created from C++
+# cql
+SQL database created with C
