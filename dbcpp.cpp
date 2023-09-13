@@ -29,8 +29,8 @@ enum ExecuteResult {
 
 struct Row {
     uint32_t id;
-    char username[COLUMN_USERNAME_SIZE];
-    char email[COLUMN_EMAIL_SIZE]; 
+    string username;
+    string email; 
 };
 
 struct Statement {
@@ -55,7 +55,7 @@ const uint32_t TABLE_MAX_ROWS = ROWS_PER_PAGE * TABLE_MAX_PAGES;
 
 struct Table {
     uint32_t num_rows;
-    void* pages[TABLE_MAX_PAGES];
+    uint32_t* pages[TABLE_MAX_PAGES];
 };
 
 void print_row(Row* row) {
@@ -63,23 +63,27 @@ void print_row(Row* row) {
 }
 
 void serialize_row(Row* source, void* destination) {
-    memcpy(destination + ID_OFFSET, &(source->id), ID_SIZE);
-    memcpy(destination + USERNAME_OFFSET, &(source->username), USERNAME_SIZE);
-    memcpy(destination + EMAIL_OFFSET, &(source->email), EMAIL_SIZE);
+    char* dest = static_cast<char*>(destination);
+
+    memcpy(dest + ID_OFFSET, &(source->id), ID_SIZE);
+    memcpy(dest + USERNAME_OFFSET, &(source->username), USERNAME_SIZE);
+    memcpy(dest + EMAIL_OFFSET, &(source->email), EMAIL_SIZE);
 }
 
 void deserialize_row(void* source, Row* destination) {
-    memcpy(&(destination->id), source + ID_OFFSET, ID_SIZE);
-    memcpy(&(destination->username), source + USERNAME_OFFSET, USERNAME_SIZE);
-    memcpy(&(destination->email), source + EMAIL_OFFSET, EMAIL_SIZE);
+    const char* src = static_cast<const char*>(source);
+
+    memcpy(&(destination->id), src + ID_OFFSET, ID_SIZE);
+    memcpy(&(destination->username), src + USERNAME_OFFSET, USERNAME_SIZE);
+    memcpy(&(destination->email), src + EMAIL_OFFSET, EMAIL_SIZE);
 }
 
 void* row_slot(Table* table, uint32_t row_num) {
     uint32_t page_num = row_num / ROWS_PER_PAGE;
-    void *page = table->pages[page_num];
+    uint32_t *page = table->pages[page_num];
     if (page == NULL) {
         // Allocate memory only when we try to access page
-        page = table->pages[page_num] = malloc(PAGE_SIZE);
+        page = table->pages[page_num] = new uint32_t[PAGE_SIZE];
     }
     uint32_t row_offset = row_num % ROWS_PER_PAGE;
     uint32_t byte_offset = row_offset * ROW_SIZE;
@@ -98,10 +102,9 @@ Table* new_table() {
 }
 
 void free_table(Table* table) {
-    for (int i = 0; table->pages[i]; i++) {
-        delete[] table->pages[i];
+    for (int i = 0; i < TABLE_MAX_PAGES; i ++) {
+        delete table->pages[i];
     }
-    delete[] table->pages;
     delete table;
 }
 
@@ -136,16 +139,19 @@ MetaCommandResult do_meta_command(InputBuffer* input_buffer, Table *table) {
 }
 
 PrepareResult prepare_statment(InputBuffer* input_buffer, Statement* statement) {
-    if (input_buffer->buffer == "insert") {
+    if (input_buffer->buffer.compare(0, 6, "insert") == 0) {
         statement->type = STATEMENT_INSERT;
         
         istringstream iss(input_buffer->buffer);
         string instruction;
         iss >> instruction >> statement->row_to_insert.id >> statement->row_to_insert.username >> statement->row_to_insert.email;
 
-        if (statement->row_to_insert.id == 0 || strlen(statement->row_to_insert.username) == 0 || strlen(statement->row_to_insert.email) == 0) {
+        if (!(statement->row_to_insert.id > 0) || statement->row_to_insert.username.empty() || statement->row_to_insert.email.empty()) {  // Returns syntax error if not all the correct arguments were provided
+            return PREPARE_SYNTAX_ERROR;
+        } else if (statement->row_to_insert.username.length() > COLUMN_USERNAME_SIZE || statement->row_to_insert.username.length() > COLUMN_EMAIL_SIZE) { // Returns syntax error if the length of the strings given are too large
             return PREPARE_SYNTAX_ERROR;
         }
+
         return PREPARE_SUCCESS;
     } 
 
@@ -166,6 +172,8 @@ ExecuteResult execute_insert (Statement* statement, Table* table) {
 
     serialize_row(row_to_insert, row_slot(table, table->num_rows));
     table->num_rows += 1;
+
+    return EXECUTE_SUCCESS;
 }
 
 ExecuteResult execute_select(Statement* statement, Table* table) {
