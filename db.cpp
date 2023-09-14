@@ -10,6 +10,8 @@ enum MetaCommandResult {
 
 enum PrepareResult {
     PREPARE_SUCCESS, 
+    PREPARE_NEGATIVE_ID,
+    PREPARE_STRING_TOO_LONG,
     PREPARE_SYNTAX_ERROR,
     PREPARE_UNRECOGNIZED_STATEMENT
 };
@@ -28,7 +30,7 @@ enum ExecuteResult {
 #define COLUMN_EMAIL_SIZE 255
 
 struct Row {
-    uint32_t id;
+    int id;
     string username;
     string email; 
 };
@@ -138,23 +140,29 @@ MetaCommandResult do_meta_command(InputBuffer* input_buffer, Table *table) {
     }
 }
 
-PrepareResult prepare_statment(InputBuffer* input_buffer, Statement* statement) {
-    if (input_buffer->buffer.compare(0, 6, "insert") == 0) {
-        statement->type = STATEMENT_INSERT;
+PrepareResult prepare_insert(InputBuffer* input_buffer, Statement* statement) {
+    statement->type = STATEMENT_INSERT;
         
-        istringstream iss(input_buffer->buffer);
-        string instruction;
-        iss >> instruction >> statement->row_to_insert.id >> statement->row_to_insert.username >> statement->row_to_insert.email;
+    istringstream iss(input_buffer->buffer);
+    string instruction;
+    iss >> instruction >> statement->row_to_insert.id >> statement->row_to_insert.username >> statement->row_to_insert.email;
 
-        if (!(statement->row_to_insert.id > 0) || statement->row_to_insert.username.empty() || statement->row_to_insert.email.empty()) {  // Returns syntax error if not all the correct arguments were provided
-            return PREPARE_SYNTAX_ERROR;
-        } else if (statement->row_to_insert.username.length() > COLUMN_USERNAME_SIZE || statement->row_to_insert.username.length() > COLUMN_EMAIL_SIZE) { // Returns syntax error if the length of the strings given are too large
-            return PREPARE_SYNTAX_ERROR;
-        }
+    if (statement->row_to_insert.username.empty() || statement->row_to_insert.email.empty()) {  
+        return PREPARE_SYNTAX_ERROR;
+    } else if (statement->row_to_insert.id < 0) {
+        return PREPARE_NEGATIVE_ID;
+    } else if (statement->row_to_insert.username.length() > COLUMN_USERNAME_SIZE || statement->row_to_insert.username.length() > COLUMN_EMAIL_SIZE) { 
+        return PREPARE_STRING_TOO_LONG;
+    }
 
-        return PREPARE_SUCCESS;
+    return PREPARE_SUCCESS;
+}
+
+PrepareResult prepare_statement(InputBuffer* input_buffer, Statement* statement) {
+    if (input_buffer->buffer.compare(0, 6, "insert") == 0) {
+        return prepare_insert(input_buffer, statement);
     } 
-
+    
     if (input_buffer->buffer == "select") {
         statement->type = STATEMENT_SELECT;
         return PREPARE_SUCCESS;
@@ -211,9 +219,15 @@ int main() {
         }
 
         Statement statement; 
-        switch (prepare_statment(input_buffer, &statement)) {
+        switch (prepare_statement(input_buffer, &statement)) {
             case (PREPARE_SUCCESS):
                 break;
+            case (PREPARE_NEGATIVE_ID):
+                cout << "ID must be positive." << endl;
+                continue;
+            case (PREPARE_STRING_TOO_LONG):
+                cout << "String is too long." << endl;
+                continue;
             case (PREPARE_SYNTAX_ERROR):
                 cout << "Syntax error. Could not parse statement." << endl;
                 continue;
