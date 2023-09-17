@@ -57,7 +57,7 @@ const uint32_t ROWS_PER_PAGE = PAGE_SIZE / ROW_SIZE;
 const uint32_t TABLE_MAX_ROWS = ROWS_PER_PAGE * TABLE_MAX_PAGES;
 
 struct Pager {
-    int file_descriptor;
+    string file_descriptor;
     uint32_t file_length;
     uint32_t* pages[TABLE_MAX_PAGES];
 };
@@ -87,7 +87,26 @@ void deserialize_row(void* source, Row* destination) {
     memcpy(&(destination->email), src + EMAIL_OFFSET, EMAIL_SIZE);
 }
 
-void* get_page(Pager* pager, uint32_t page_num) {}
+void* get_page(Pager* pager, uint32_t page_num) {
+    if (page_num > TABLE_MAX_PAGES) {
+        cout << "Tried to fetch page number out of bounds." << page_num << " > " << TABLE_MAX_PAGES << endl;
+        exit(EXIT_FAILURE);
+    }
+
+    if (pager->pages[page_num] == NULL) {
+        // Cache miss. Allocate memory and load from file.
+        uint32_t num_pages = pager->file_length / PAGE_SIZE;
+
+        // We might save a partial page at the end of the file
+        if (pager->file_length % PAGE_SIZE) {
+            num_pages += 1;
+        }
+
+        if (page_num <= num_pages) {
+            
+        }
+    }
+}
 
 void* row_slot(Table* table, uint32_t row_num) {
     uint32_t page_num = row_num / ROWS_PER_PAGE;
@@ -97,7 +116,7 @@ void* row_slot(Table* table, uint32_t row_num) {
     return page + byte_offset;
 }
 
-Pager* pager_open(const char* filename) {
+Pager* pager_open(string filename) {
     fstream file;
     file.open(filename, ios::in | ios::out | ios::app);
 
@@ -109,13 +128,13 @@ Pager* pager_open(const char* filename) {
     streampos fileSize = file.tellg();
 
     Pager* pager = new Pager;
-    pager->file_descriptor = fd;
+    pager->file_descriptor = filename;
     pager->file_length = fileSize;
 
-    return pager
+    return pager;
 }
 
-Table* db_open(const char* filename) {
+Table* db_open(string filename) {
     Pager* pager = pager_open(filename);
     uint32_t num_rows = pager->file_length / ROW_SIZE;
     
@@ -124,13 +143,6 @@ Table* db_open(const char* filename) {
     table->num_rows = num_rows;
 
     return table;
-}
-
-void free_table(Table* table) {
-    for (int i = 0; i < TABLE_MAX_PAGES; i ++) {
-        delete table->pages[i];
-    }
-    delete table;
 }
 
 struct InputBuffer {
