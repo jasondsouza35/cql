@@ -218,7 +218,7 @@ void* get_page(Pager* pager, uint32_t page_num) {
 
     if (pager->pages[page_num] == NULL) {
         // Cache miss. Allocate memory and load from file.
-        void* page = malloc(PAGE_SIZE);
+        void* page = malloc(7169); // PAGE_SIZE WAS REPLACED BY 7169 TO MATCH THE NUMBER OF KB REQUIRED FOR 7 DIGITS
         uint32_t num_pages = pager->file_length / PAGE_SIZE;
 
         // We might save a partial page at the end of the file
@@ -586,17 +586,17 @@ void create_new_root(Table* table, uint32_t right_child_page_num) {
     void* left_child = get_page(table->pager, left_child_page_num);
 
     /* Left child has data copied from old root */
-    memcpy(left_child, root, PAGE_SIZE); // PAGE_SIZE WAS REPLACED BY 7169 TO MATCH THE NUMBER OF KB REQUIRED FOR 7 DIGITS
+    memcpy(left_child, root, 7169); // PAGE_SIZE WAS REPLACED BY 7169 TO MATCH THE NUMBER OF KB REQUIRED FOR 7 DIGITS
     set_node_root(left_child, false);
 
     /* Root node is a new internal node with one key and two children */
     initialize_internal_node(root);
     set_node_root(root, true);
     *internal_node_num_keys(root) = 1;
-    // *internal_node_child(root, 0) = left_child_page_num;
-    // uint32_t left_child_max_key = get_node_max_key(left_child);
-    // *internal_node_key(root, 0) = left_child_max_key;
-    // *internal_node_right_child(root) = right_child_page_num;
+    *internal_node_child(root, 0) = left_child_page_num;
+    uint32_t left_child_max_key = get_node_max_key(left_child);
+    *internal_node_key(root, 0) = left_child_max_key;
+    *internal_node_right_child(root) = right_child_page_num;
 }
 
 void leaf_node_split_and_insert(Cursor* cursor, uint32_t key, Row* value) {
